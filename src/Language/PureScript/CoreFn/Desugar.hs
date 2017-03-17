@@ -93,10 +93,6 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
     add [] env = env
     add (NonRec _ i e:binds) env = M.insert (runIdent i) e (add binds env)
 
-  -- annotate stack env (Constructor ann t n is) = Constructor ann t n is
-  -- annotate stack env (Accessor ann acc a) = Accessor ann acc (annotate env a)
-  annotate stack env (Var ann i) = Var ann i
-
   -- taint :: Int -> [(Int, Ident)] -> Expr Ann -> (Expr Ann, [Int])
   -- taint idx binders (Abs ann binder _ exp)
   --   | isTainted = (Abs ann binder NeedsAST exp, tainted)
