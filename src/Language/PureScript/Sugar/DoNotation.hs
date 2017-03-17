@@ -38,21 +38,21 @@ desugarReify d =
   stripPos (PositionedValue _ _ v) = stripPos v
   stripPos v = v
 
-  reify :: Expr -> Expr
-  reify (Parens expr) = Constructor (Qualified Nothing (ProperName "Parens")) `App` reify expr
-  reify (IfThenElse cond t f) = Constructor (Qualified Nothing (ProperName "IfThenElse")) `App` reify cond `App` reify t `App` reify f
-  reify (BinaryNoParens cond t f) = Constructor (Qualified Nothing (ProperName "BinaryNoParens")) `App` reify cond `App` reify t `App` reify f
-  reify (Op (Qualified _ op)) = Constructor (Qualified Nothing (ProperName "Op")) `App` Literal (StringLiteral $ mkString $ runOpName op)
-  reify (Literal (NumericLiteral x)) = Constructor (Qualified Nothing (ProperName "Literal")) `App` Constructor (Qualified Nothing (ProperName "NumericLiteral")) `App` Literal (NumericLiteral x)
-  reify (Constructor (Qualified _ cnst)) = Constructor (Qualified Nothing (ProperName "Constructor")) `App` Literal (StringLiteral $ mkString $ runProperName cnst)
+  -- reify :: Expr -> Expr
+  -- reify (Parens expr) = Constructor (Qualified Nothing (ProperName "Parens")) `App` reify expr
+  -- reify (IfThenElse cond t f) = Constructor (Qualified Nothing (ProperName "IfThenElse")) `App` reify cond `App` reify t `App` reify f
+  -- reify (BinaryNoParens cond t f) = Constructor (Qualified Nothing (ProperName "BinaryNoParens")) `App` reify cond `App` reify t `App` reify f
+  -- reify (Op (Qualified _ op)) = Constructor (Qualified Nothing (ProperName "Op")) `App` Literal (StringLiteral $ mkString $ runOpName op)
+  -- reify (Literal (NumericLiteral x)) = Constructor (Qualified Nothing (ProperName "Literal")) `App` Constructor (Qualified Nothing (ProperName "NumericLiteral")) `App` Literal (NumericLiteral x)
+  -- reify (Constructor (Qualified _ cnst)) = Constructor (Qualified Nothing (ProperName "Constructor")) `App` Literal (StringLiteral $ mkString $ runProperName cnst)
 
   replace :: Expr -> m Expr
-  replace expr = go (stripPos expr)
+  replace expr = return expr -- go (stripPos expr)
 
-  go :: Expr -> m Expr
-  go expr | (\x -> trace (show x) False) expr = undefined
-  go (App (App (Var (Qualified _ (Ident "reify"))) ast) f) = return $ App f $ trace (show $ reify ast) (reify ast)
-  go x = return x
+  -- go :: Expr -> m Expr
+  -- go expr | (\x -> trace (show x) False) expr = undefined
+  -- go (App (App (Var (Qualified _ (Ident "reify"))) ast) f) = return $ App f $ trace (show $ reify ast) (reify ast)
+  -- go x = return x
 
 -- | Desugar a single do statement
 desugarDo :: forall m. (MonadSupply m, MonadError MultipleErrors m) => Declaration -> m Declaration

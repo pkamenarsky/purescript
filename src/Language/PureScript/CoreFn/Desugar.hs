@@ -6,7 +6,7 @@ import Protolude (ordNub)
 import Control.Arrow (second)
 
 import Data.Function (on)
-import Data.List (sort, sortBy)
+import Data.List (sort, sortBy, elem)
 import Data.Maybe (mapMaybe)
 import Data.Tuple (swap)
 import qualified Data.Map as M
@@ -59,11 +59,20 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
   ssA :: Maybe SourceSpan -> Ann
   ssA ss = (ss, [], Nothing, Nothing)
 
+  taint :: Int -> [(Int, Ident)] -> Expr Ann -> (Expr Ann, [Int])
+  taint idx binders (Abs ann binder _ exp)
+    | isTainted = (Abs ann binder NeedsAST exp, tainted)
+    | otherwise = (Abs ann binder Untainted exp, tainted)
+    where
+    (exp', tainted) = taint (idx + 1) ((idx, binder):binders) exp
+    isTainted = idx `elem` tainted
+  taint idx binders (App _ (Var _ (Qualified _ (Ident "reify"))) exp) = undefined
+
   -- | Desugars member declarations from AST to CoreFn representation.
   declToCoreFn :: Maybe SourceSpan -> [Comment] -> A.Declaration -> [Bind Ann]
   declToCoreFn ss com (A.DataDeclaration Newtype _ _ [(ctor, _)]) =
     [NonRec (ssA ss) (properToIdent ctor) $
-      Abs (ss, com, Nothing, Just IsNewtype) (Ident "x") (Var nullAnn $ Qualified Nothing (Ident "x"))]
+      Abs (ss, com, Nothing, Just IsNewtype) (Ident "x") Untainted (Var nullAnn $ Qualified Nothing (Ident "x"))]
   declToCoreFn _ _ d@(A.DataDeclaration Newtype _ _ _) =
     error $ "Found newtype with multiple constructors: " ++ show d
   declToCoreFn ss com (A.DataDeclaration Data tyName _ ctors) =
@@ -90,7 +99,7 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
   exprToCoreFn ss com ty (A.ObjectUpdate obj vs) =
     ObjectUpdate (ss, com, ty, Nothing) (exprToCoreFn ss [] Nothing obj) $ map (second (exprToCoreFn ss [] Nothing)) vs
   exprToCoreFn ss com ty (A.Abs (A.VarBinder name) v) =
-    Abs (ss, com, ty, Nothing) name (exprToCoreFn ss [] Nothing v)
+    Abs (ss, com, ty, Nothing) name Untainted (exprToCoreFn ss [] Nothing v)
   exprToCoreFn _ _ _ (A.Abs _ _) =
     internalError "Abs with Binder argument was not desugared before exprToCoreFn mn"
   exprToCoreFn ss com ty (A.App v1 v2) =
@@ -118,7 +127,7 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
         ctor = Var (ss, [], Nothing, Just IsTypeClassConstructor) (fmap properToIdent name)
     in foldl (App (ss, com, Nothing, Nothing)) ctor args
   exprToCoreFn ss com ty  (A.TypeClassDictionaryAccessor _ ident) =
-    Abs (ss, com, ty, Nothing) (Ident "dict")
+    Abs (ss, com, ty, Nothing) (Ident "dict") Untainted
       (Accessor nullAnn (mkString $ runIdent ident) (Var nullAnn $ Qualified Nothing (Ident "dict")))
   exprToCoreFn _ com ty (A.PositionedValue ss com1 v) =
     exprToCoreFn (Just ss) (com ++ com1) ty v
@@ -258,7 +267,8 @@ mkTypeClassConstructor ss com supers members =
       dict = Literal nullAnn (ObjectLiteral props)
   in Abs (ss, com, Nothing, Just IsTypeClassConstructor)
          (Ident a)
-         (foldr (Abs nullAnn . Ident) dict as)
+         Untainted
+         (foldr (\x -> Abs nullAnn (Ident x) Untainted) dict as)
 
 -- | Converts a ProperName to an Ident.
 properToIdent :: ProperName a -> Ident

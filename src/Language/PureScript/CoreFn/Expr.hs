@@ -12,6 +12,8 @@ import Language.PureScript.CoreFn.Binders
 import Language.PureScript.Names
 import Language.PureScript.PSString (PSString)
 
+data Tainted = Untainted | NeedsAST deriving Show
+
 -- |
 -- Data type for expressions and terms
 --
@@ -35,7 +37,7 @@ data Expr a
   -- |
   -- Function introduction
   --
-  | Abs a Ident (Expr a)
+  | Abs a Ident Tainted (Expr a)
   -- |
   -- Function application
   --
@@ -100,7 +102,7 @@ extractAnn (Literal a _) = a
 extractAnn (Constructor a _ _ _) = a
 extractAnn (Accessor a _ _) = a
 extractAnn (ObjectUpdate a _ _) = a
-extractAnn (Abs a _ _) = a
+extractAnn (Abs a _ _ _) = a
 extractAnn (App a _ _) = a
 extractAnn (Var a _) = a
 extractAnn (Case a _ _) = a
@@ -115,7 +117,7 @@ modifyAnn f (Literal a b)         = Literal (f a) b
 modifyAnn f (Constructor a b c d) = Constructor (f a) b c d
 modifyAnn f (Accessor a b c)      = Accessor (f a) b c
 modifyAnn f (ObjectUpdate a b c)  = ObjectUpdate (f a) b c
-modifyAnn f (Abs a b c)           = Abs (f a) b c
+modifyAnn f (Abs a b c d)         = Abs (f a) b c d
 modifyAnn f (App a b c)           = App (f a) b c
 modifyAnn f (Var a b)             = Var (f a) b
 modifyAnn f (Case a b c)          = Case (f a) b c

@@ -29,6 +29,10 @@ literalToJSON _ (BooleanLiteral b) = toJSON ("BooleanLiteral", b)
 literalToJSON t (ArrayLiteral xs) = toJSON ("ArrayLiteral", map t xs)
 literalToJSON t (ObjectLiteral xs) = toJSON ("ObjectLiteral", recordToJSON t xs)
 
+taintedToJSON :: Tainted -> Value
+taintedToJSON NeedsAST  = toJSON True
+taintedToJSON Untainted = toJSON False
+
 identToJSON :: Ident -> Value
 identToJSON = toJSON . runIdent
 
@@ -85,8 +89,9 @@ exprToJSON (ObjectUpdate _ r fs)  = toJSON ( "ObjectUpdate"
                                            , exprToJSON r
                                            , recordToJSON exprToJSON fs
                                            )
-exprToJSON (Abs _ p b)            = toJSON ( "Abs"
+exprToJSON (Abs _ p t b)          = toJSON ( "Abs"
                                            , identToJSON p
+                                           , taintedToJSON t
                                            , exprToJSON b
                                            )
 exprToJSON (App _ f x)            = toJSON ( "App"

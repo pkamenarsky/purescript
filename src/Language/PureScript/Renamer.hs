@@ -149,9 +149,9 @@ renameInValue (Accessor ann prop v) =
   Accessor ann prop <$> renameInValue v
 renameInValue (ObjectUpdate ann obj vs) =
   ObjectUpdate ann <$> renameInValue obj <*> traverse (\(name, v) -> (,) name <$> renameInValue v) vs
-renameInValue e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) = return e
-renameInValue (Abs ann name v) =
-  newScope $ Abs ann <$> updateScope name <*> renameInValue v
+renameInValue e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _ _) = return e
+renameInValue (Abs ann name tainted v) =
+  newScope $ Abs ann <$> updateScope name <*> pure tainted <*> renameInValue v
 renameInValue (App ann v1 v2) =
   App ann <$> renameInValue v1 <*> renameInValue v2
 renameInValue (Var ann (Qualified Nothing name)) =

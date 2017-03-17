@@ -188,17 +188,17 @@ moduleToJs (Module coms mn imps exps foreigns decls) foreign_ =
     obj <- valueToJs o
     sts <- mapM (sndM valueToJs) ps
     extendObj obj sts
-  valueToJs' e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
+  valueToJs' e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _ _) =
     let args = unAbs e
     in return $ AST.Function Nothing Nothing (map identToJs args) (AST.Block Nothing $ map assign args)
     where
     unAbs :: Expr Ann -> [Ident]
-    unAbs (Abs _ arg val) = arg : unAbs val
+    unAbs (Abs _ arg _ val) = arg : unAbs val
     unAbs _ = []
     assign :: Ident -> AST
     assign name = AST.Assignment Nothing (accessorString (mkString $ runIdent name) (AST.Var Nothing "this"))
                                (var name)
-  valueToJs' (Abs _ arg val) = do
+  valueToJs' (Abs _ arg _ val) = do
     ret <- valueToJs val
     return $ AST.Function Nothing Nothing [identToJs arg] (AST.Block Nothing [AST.Return Nothing ret])
   valueToJs' e@App{} = do
