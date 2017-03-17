@@ -63,14 +63,35 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
   ssA :: Maybe SourceSpan -> Ann
   ssA ss = (ss, [], Nothing, Nothing)
 
+  rename :: Text -> Expr Ann -> Expr Ann -> Expr Ann
+  rename _ v (Literal ann l) = Literal ann l
+  rename _ v (Constructor ann t n is) = Constructor ann t n is
+  rename t v (Accessor ann s e) = Accessor ann s (rename t v e)
+  rename t v (ObjectUpdate ann e es) = ObjectUpdate ann (rename t v e) (error "unimplemened")
+  rename t v (Abs ann i@(Ident t') tainted e)
+    | t /= t'    = Abs ann i tainted (rename t v e)
+    | otherwise = Abs ann i tainted e
+  rename t v (App ann f a) = App ann (rename t v f) (rename t v a)
+  rename t v (Var ann q@(Qualified m (Ident t')))
+    | t == t'    = v
+    | otherwise = Var ann q
+
   reify :: [Expr Ann] -> M.Map Text (Expr Ann) -> Expr Ann -> Expr Ann
   -- reify stack env exp | trace (show $ fmap (const ()) exp) False = undefined
   reify stack env (Literal ann lit) = Literal ann (fmap (reify stack env) lit)
-  reify stack env (App ann (Var _ (Qualified _ (Ident "reify"))) ast) = error $ "Reify: " ++ show (fmap (const ()) ast) ++ ", env: " ++ show (fmap (fmap (const ())) env)
+  reify stack env (Var ann q) = Var ann q
+  reify stack env (App ann (Var _ (Qualified _ (Ident "reify"))) ast) = error $ "Reify: " ++ show (fmap (const ()) $ renameall (M.toList env) ast) ++ ", env: " ++ show (fmap (fmap (const ())) env)
+    where
+    renameall [] ast          = ast
+    renameall ((t, v):rs) ast = rename t v (renameall rs ast)
   reify stack env (App ann f a) = App ann (reify (a':stack) env f) a'
     where a' = reify stack env a
   reify [] env (Abs ann i t a) = Abs ann i t (reify [] env a)
   reify (x:stack) env (Abs ann i t a) = Abs ann i t (reify stack (M.insert (runIdent i) x env) a)
+  reify stack env (Let ann binds e) = Let ann binds (reify stack (add binds env) e)
+    where
+    add [] env = env
+    add (NonRec _ i e:binds) env = M.insert (runIdent i) e (add binds env)
 
   -- annotate stack env (Constructor ann t n is) = Constructor ann t n is
   -- annotate stack env (Accessor ann acc a) = Accessor ann acc (annotate env a)
