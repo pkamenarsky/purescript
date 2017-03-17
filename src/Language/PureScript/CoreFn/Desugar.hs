@@ -10,6 +10,8 @@ import Data.List (sort, sortBy, elem)
 import Data.Maybe (mapMaybe)
 import Data.Tuple (swap)
 import qualified Data.Map as M
+import Data.Text (Text)
+import qualified Data.Text as T
 
 import Language.PureScript.AST.Literals
 import Language.PureScript.AST.SourcePos
@@ -28,7 +30,7 @@ import Language.PureScript.Types
 import Language.PureScript.PSString (mkString)
 import qualified Language.PureScript.AST as A
 
-data AnnR = AnnR (Expr AnnR)
+import Debug.Trace
 
 -- | Desugars a module from AST to CoreFn representation.
 moduleToCoreFn :: Environment -> A.Module -> Module Ann
@@ -61,22 +63,18 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
   ssA :: Maybe SourceSpan -> Ann
   ssA ss = (ss, [], Nothing, Nothing)
 
-  annotate :: Expr Ann -> Expr (Expr Ann, Ann)
-  annotate (Literal ann lit) = Literal (Literal ann lit, ann) (fmap annotate lit)
-  annotate (App ann f a) = App (App ann f a, ann) (annotate f) (annotate a)
-  annotate (Constructor ann t n is) = Constructor (Constructor ann t n is, ann) t n is
-  annotate (Accessor ann acc a) = Accessor (Accessor ann acc a, ann) acc (annotate a)
-  annotate (Abs ann i t a) = Abs (Abs ann i t a, ann) i t (annotate a)
-  annotate (Var ann i) = Var (Var ann i, ann) i
+  annotate :: [Expr Ann] -> M.Map Text (Expr Ann) -> Expr Ann -> Expr Ann
+  -- annotate stack env exp | trace (show $ fmap (const ()) exp) False = undefined
+  annotate stack env (Literal ann lit) = Literal ann (fmap (annotate stack env) lit)
+  annotate stack env (App ann (Var _ (Qualified _ (Ident "reify"))) ast) = error $ "Reify: " ++ show (fmap (const ()) ast) ++ ", env: " ++ show (fmap (fmap (const ())) env)
+  annotate stack env (App ann f a) = App ann (annotate (a':stack) env f) a'
+    where a' = annotate stack env a
+  annotate [] env (Abs ann i t a) = Abs ann i t (annotate [] env a)
+  annotate (x:stack) env (Abs ann i t a) = Abs ann i t (annotate stack (M.insert (runIdent i) x env) a)
 
-  reify :: Expr (Expr Ann, Ann) -> Expr Ann
-  reify (Literal (_, ann) lit) = Literal ann (fmap reify lit)
-  reify (App _ (Var _ (Qualified _ (Ident "reify"))) ast) = error $ "Reifying: " ++ show (fmap (const ()) (fst $ extractAnn ast))
-  reify (App (_, ann) f a) = App ann (reify f) (reify a)
-  reify (Constructor (_, ann) t n is) = Constructor ann t n is
-  reify (Accessor (_, ann) acc a) = Accessor ann acc (reify a)
-  reify (Abs (_, ann) i t a) = Abs ann i t (reify a)
-  reify (Var (_, ann) i) = Var ann i
+  -- annotate stack env (Constructor ann t n is) = Constructor ann t n is
+  -- annotate stack env (Accessor ann acc a) = Accessor ann acc (annotate env a)
+  annotate stack env (Var ann i) = Var ann i
 
   -- taint :: Int -> [(Int, Ident)] -> Expr Ann -> (Expr Ann, [Int])
   -- taint idx binders (Abs ann binder _ exp)
@@ -100,9 +98,9 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
       in NonRec (ssA ss) (properToIdent ctor) $ Constructor (ss, com, Nothing, Nothing) tyName ctor fields
   declToCoreFn ss _   (A.DataBindingGroupDeclaration ds) = concatMap (declToCoreFn ss []) ds
   declToCoreFn ss com (A.ValueDeclaration name _ _ [A.MkUnguarded e]) =
-    [NonRec (ssA ss) name (reify $ annotate $ exprToCoreFn ss com Nothing e)]
+    [NonRec (ssA ss) name (annotate [] M.empty $ exprToCoreFn ss com Nothing e)]
   declToCoreFn ss _   (A.BindingGroupDeclaration ds) =
-    [Rec $ map (\(name, _, e) -> ((ssA ss, name), reify $ annotate $ exprToCoreFn ss [] Nothing e)) ds]
+    [Rec $ map (\(name, _, e) -> ((ssA ss, name), annotate [] M.empty $ exprToCoreFn ss [] Nothing e)) ds]
   declToCoreFn ss com (A.TypeClassDeclaration name _ supers _ members) =
     [NonRec (ssA ss) (properToIdent name) $ mkTypeClassConstructor ss com supers members]
   declToCoreFn _  com (A.PositionedDeclaration ss com1 d) =
