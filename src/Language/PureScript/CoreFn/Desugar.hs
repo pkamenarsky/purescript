@@ -63,14 +63,14 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
   ssA :: Maybe SourceSpan -> Ann
   ssA ss = (ss, [], Nothing, Nothing)
 
-  annotate :: [Expr Ann] -> M.Map Text (Expr Ann) -> Expr Ann -> Expr Ann
-  -- annotate stack env exp | trace (show $ fmap (const ()) exp) False = undefined
-  annotate stack env (Literal ann lit) = Literal ann (fmap (annotate stack env) lit)
-  annotate stack env (App ann (Var _ (Qualified _ (Ident "reify"))) ast) = error $ "Reify: " ++ show (fmap (const ()) ast) ++ ", env: " ++ show (fmap (fmap (const ())) env)
-  annotate stack env (App ann f a) = App ann (annotate (a':stack) env f) a'
-    where a' = annotate stack env a
-  annotate [] env (Abs ann i t a) = Abs ann i t (annotate [] env a)
-  annotate (x:stack) env (Abs ann i t a) = Abs ann i t (annotate stack (M.insert (runIdent i) x env) a)
+  reify :: [Expr Ann] -> M.Map Text (Expr Ann) -> Expr Ann -> Expr Ann
+  -- reify stack env exp | trace (show $ fmap (const ()) exp) False = undefined
+  reify stack env (Literal ann lit) = Literal ann (fmap (reify stack env) lit)
+  reify stack env (App ann (Var _ (Qualified _ (Ident "reify"))) ast) = error $ "Reify: " ++ show (fmap (const ()) ast) ++ ", env: " ++ show (fmap (fmap (const ())) env)
+  reify stack env (App ann f a) = App ann (reify (a':stack) env f) a'
+    where a' = reify stack env a
+  reify [] env (Abs ann i t a) = Abs ann i t (reify [] env a)
+  reify (x:stack) env (Abs ann i t a) = Abs ann i t (reify stack (M.insert (runIdent i) x env) a)
 
   -- annotate stack env (Constructor ann t n is) = Constructor ann t n is
   -- annotate stack env (Accessor ann acc a) = Accessor ann acc (annotate env a)
@@ -98,9 +98,9 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
       in NonRec (ssA ss) (properToIdent ctor) $ Constructor (ss, com, Nothing, Nothing) tyName ctor fields
   declToCoreFn ss _   (A.DataBindingGroupDeclaration ds) = concatMap (declToCoreFn ss []) ds
   declToCoreFn ss com (A.ValueDeclaration name _ _ [A.MkUnguarded e]) =
-    [NonRec (ssA ss) name (annotate [] M.empty $ exprToCoreFn ss com Nothing e)]
+    [NonRec (ssA ss) name (reify [] M.empty $ exprToCoreFn ss com Nothing e)]
   declToCoreFn ss _   (A.BindingGroupDeclaration ds) =
-    [Rec $ map (\(name, _, e) -> ((ssA ss, name), annotate [] M.empty $ exprToCoreFn ss [] Nothing e)) ds]
+    [Rec $ map (\(name, _, e) -> ((ssA ss, name), reify [] M.empty $ exprToCoreFn ss [] Nothing e)) ds]
   declToCoreFn ss com (A.TypeClassDeclaration name _ supers _ members) =
     [NonRec (ssA ss) (properToIdent name) $ mkTypeClassConstructor ss com supers members]
   declToCoreFn _  com (A.PositionedDeclaration ss com1 d) =
