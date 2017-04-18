@@ -77,9 +77,10 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
     | otherwise = Var ann q
 
   reify :: [Expr Ann] -> M.Map Text (Expr Ann) -> Expr Ann -> Expr Ann
-  -- reify stack env exp | trace (show $ fmap (const ()) exp) False = undefined
+  reify stack env exp | trace (show $ fmap (const ()) exp) False = undefined
   reify stack env (Literal ann lit) = Literal ann (fmap (reify stack env) lit)
   reify stack env (Var ann q) = Var ann q
+  reify stack env (Accessor ann s e) = Accessor ann s (reify stack env e)
   reify stack env (App ann (Var _ (Qualified _ (Ident "reify"))) ast) = error $ "Reify: " ++ show (fmap (const ()) $ renameall (M.toList env) ast) ++ ", env: " ++ show (fmap (fmap (const ())) env)
     where
     renameall [] ast          = ast
