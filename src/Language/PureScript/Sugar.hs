@@ -62,6 +62,7 @@ desugar externs =
     >>> traverse desugarCasesModule
     >=> traverse desugarTypeDeclarationsModule
     >=> desugarImports externs
+    >=> traverse desugarStaticModule
     >=> rebracket externs
     >=> traverse checkFixityExports
     >=> traverse (deriveInstances externs)

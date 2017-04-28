@@ -3,18 +3,21 @@
 
 {-# LANGUAGE PatternGuards #-}
 
-module Language.PureScript.Sugar.DoNotation (desugarDoModule) where
+module Language.PureScript.Sugar.DoNotation (desugarDoModule, desugarStaticModule) where
 
 import           Prelude.Compat
 
 import           Control.Monad.Error.Class (MonadError(..))
 import           Control.Monad.Supply.Class
+import           Control.Monad.Trans.State
 import           Data.Monoid (First(..))
 import           Language.PureScript.AST
 import           Language.PureScript.Crash
 import           Language.PureScript.Errors
 import           Language.PureScript.Names
 import qualified Language.PureScript.Constants as C
+
+import Debug.Trace
 
 -- | Replace all @DoNotationBind@ and @DoNotationValue@ constructors with
 -- applications of the bind function in scope, and all @DoNotationLet@
@@ -70,3 +73,21 @@ desugarDo d =
     rest' <- go rest
     return $ Let ds rest'
   go (PositionedDoNotationElement pos com el : rest) = rethrowWithPosition pos $ PositionedValue pos com <$> go (el : rest)
+
+desugarStaticModule :: forall m. (MonadSupply m, MonadError MultipleErrors m) => Module -> m Module
+desugarStaticModule (Module ss coms mn ds exts) = Module ss coms mn <$> parU ds desugarStatic <*> pure exts
+
+desugarStatic :: forall m. (MonadSupply m, MonadError MultipleErrors m) => Declaration -> m Declaration
+desugarStatic (PositionedDeclaration pos com d) = PositionedDeclaration pos com <$> rethrowWithPosition pos (desugarStatic d)
+desugarStatic d = do
+  let (f, _, _) = everywhereOnValuesM return replace return
+  (d', st_table) <- runStateT (f d) []
+  return $ trace (show st_table) d'
+  where
+  replace :: Expr -> StateT [(String, Expr)] m Expr
+  -- replace e | trace (show e) False = undefined
+  replace (PositionedValue p v (App (PositionedValue p2 v2 (Var (Qualified _n (Ident "static")))) expr)) = do
+    modify (("static", expr):)
+    return $ App (Constructor (Qualified _n (ProperName "StaticPtr"))) (Literal (StringLiteral "static_ptr"))
+  replace (PositionedValue pos com v) = PositionedValue pos com <$> rethrowWithPosition pos (replace v)
+  replace other = return other
