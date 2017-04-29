@@ -3,24 +3,18 @@
 
 {-# LANGUAGE PatternGuards #-}
 
-module Language.PureScript.Sugar.DoNotation (desugarDoModule, desugarStaticModule) where
+module Language.PureScript.Sugar.DoNotation (desugarDoModule) where
 
 import           Prelude.Compat
 
 import           Control.Monad.Error.Class (MonadError(..))
 import           Control.Monad.Supply.Class
-import           Control.Monad.Trans.State
 import           Data.Monoid (First(..))
-import           Data.Maybe (fromMaybe)
-import qualified Data.Map as M
 import           Language.PureScript.AST
 import           Language.PureScript.Crash
 import           Language.PureScript.Errors
 import           Language.PureScript.Names
 import qualified Language.PureScript.Constants as C
-import           Language.PureScript.Environment
-
-import Debug.Trace
 
 -- | Replace all @DoNotationBind@ and @DoNotationValue@ constructors with
 -- applications of the bind function in scope, and all @DoNotationLet@
@@ -76,32 +70,3 @@ desugarDo d =
     rest' <- go rest
     return $ Let ds rest'
   go (PositionedDoNotationElement pos com el : rest) = rethrowWithPosition pos $ PositionedValue pos com <$> go (el : rest)
-
-desugarStaticModule :: forall m. (MonadSupply m, MonadError MultipleErrors m) => Module -> m Module
-desugarStaticModule (Module ss coms mn ds exts) = do
-  (ds', table) <- runStateT (parU ds desugarStatic) M.empty
-  return $ Module ss coms mn (tableDecl table:ds') ((ValueRef (Ident "static_ptr_table"):) <$> exts)
-  where
-  tableDecl :: M.Map Int Expr -> Declaration
-  tableDecl table = ValueDeclaration (Ident "static_ptr_table") Public [] [GuardedExpr [] (tableExpr table)]
-
-  mkQ n = Qualified (Just $ moduleNameFromString "Main") (ProperName n)
-  mkI n = Qualified (Just $ moduleNameFromString "Main") (Ident n)
-
-  tableExpr :: M.Map Int Expr -> Expr
-  tableExpr table = Literal $ ArrayLiteral
-    [ Constructor (mkQ "StaticValue") `App` (Var (mkI "coerce") `App` (fromMaybe (error "error") $ M.lookup 0 table)) ]
-
-desugarStatic :: forall m. (MonadSupply m, MonadError MultipleErrors m) => Declaration -> StateT (M.Map Int Expr) m Declaration
-desugarStatic (PositionedDeclaration pos com d) = PositionedDeclaration pos com <$> rethrowWithPosition pos (desugarStatic d)
-desugarStatic d = do
-  let (f, _, _) = everywhereOnValuesM return replace return
-  f d
-  where
-  replace :: Expr -> StateT (M.Map Int Expr) m Expr
-  -- replace e | trace (show e) False = undefined
-  replace (PositionedValue p v (App (PositionedValue p2 v2 (Var (Qualified _n (Ident "static")))) expr)) = do
-    modify (M.insert 0 expr)
-    return $ App (Constructor (Qualified _n (ProperName "StaticPtr"))) (Literal (StringLiteral "static_ptr"))
-  replace (PositionedValue pos com v) = PositionedValue pos com <$> rethrowWithPosition pos (replace v)
-  replace other = return other
