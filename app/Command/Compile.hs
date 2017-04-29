@@ -27,8 +27,6 @@ import           System.FilePath.Glob (glob)
 import           System.IO (hPutStr, hPutStrLn, stderr)
 import           System.IO.UTF8 (readUTF8FileT)
 
-import Prelude
-
 data PSCMakeOptions = PSCMakeOptions
   { pscmInput        :: [FilePath]
   , pscmOutputDir    :: FilePath
