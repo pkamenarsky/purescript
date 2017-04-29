@@ -11,12 +11,14 @@ import           Control.Monad.Error.Class (MonadError(..))
 import           Control.Monad.Supply.Class
 import           Control.Monad.Trans.State
 import           Data.Monoid (First(..))
+import           Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 import           Language.PureScript.AST
 import           Language.PureScript.Crash
 import           Language.PureScript.Errors
 import           Language.PureScript.Names
 import qualified Language.PureScript.Constants as C
+import           Language.PureScript.Environment
 
 import Debug.Trace
 
@@ -78,10 +80,17 @@ desugarDo d =
 desugarStaticModule :: forall m. (MonadSupply m, MonadError MultipleErrors m) => Module -> m Module
 desugarStaticModule (Module ss coms mn ds exts) = do
   (ds', table) <- runStateT (parU ds desugarStatic) M.empty
-  return $ Module ss coms mn (buildTable table:ds') exts
+  return $ Module ss coms mn (tableDecl table:ds') ((ValueRef (Ident "static_ptr_table"):) <$> exts)
   where
-  buildTable :: M.Map Int Expr -> Declaration
-  buildTable = undefined
+  tableDecl :: M.Map Int Expr -> Declaration
+  tableDecl table = ValueDeclaration (Ident "static_ptr_table") Public [] [GuardedExpr [] (tableExpr table)]
+
+  mkQ n = Qualified (Just $ moduleNameFromString "Main") (ProperName n)
+  mkI n = Qualified (Just $ moduleNameFromString "Main") (Ident n)
+
+  tableExpr :: M.Map Int Expr -> Expr
+  tableExpr table = Literal $ ArrayLiteral
+    [ Constructor (mkQ "StaticValue") `App` (Var (mkI "coerce") `App` (fromMaybe (error "error") $ M.lookup 0 table)) ]
 
 desugarStatic :: forall m. (MonadSupply m, MonadError MultipleErrors m) => Declaration -> StateT (M.Map Int Expr) m Declaration
 desugarStatic (PositionedDeclaration pos com d) = PositionedDeclaration pos com <$> rethrowWithPosition pos (desugarStatic d)
