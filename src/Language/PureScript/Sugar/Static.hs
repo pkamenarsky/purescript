@@ -5,7 +5,6 @@ import           Prelude.Compat
 import           Control.Monad.Error.Class (MonadError(..))
 import           Control.Monad.Supply.Class
 import           Control.Monad.Trans.State
-import           Data.Monoid (First(..))
 import           Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 import qualified Data.Text as T

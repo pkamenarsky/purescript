@@ -22,6 +22,7 @@ import Language.PureScript.Sugar.LetPattern as S
 import Language.PureScript.Sugar.Names as S
 import Language.PureScript.Sugar.ObjectWildcards as S
 import Language.PureScript.Sugar.Operators as S
+import Language.PureScript.Sugar.Static as S
 import Language.PureScript.Sugar.TypeClasses as S
 import Language.PureScript.Sugar.TypeClasses.Deriving as S
 import Language.PureScript.Sugar.TypeDeclarations as S
