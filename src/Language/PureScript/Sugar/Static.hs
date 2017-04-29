@@ -42,7 +42,8 @@ desugarStatic mn d = do
   f d
   where
   replace :: Expr -> StateT (M.Map Int Expr) m Expr
-  replace (PositionedValue p v (App (PositionedValue _ _ (Var (Qualified (Just (ModuleName [ProperName "Static"])) (Ident "static")))) expr)) = do
+  -- replace (PositionedValue p v (App (PositionedValue _ _ (Var (Qualified (Just (ModuleName [ProperName "Static"])) (Ident "static")))) expr)) = do
+  replace (PositionedValue p v (App (PositionedValue _ _ (Var (Qualified _n (Ident "static")))) expr)) = do
     table <- get
     let ptr = (fromMaybe (-1) $ fst <$> M.lookupLE maxBound table) + 1
     modify $ M.insert ptr expr
